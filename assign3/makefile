@@ -1,94 +1,67 @@
-# ===== Compiler & Flags =====
-CC       = gcc
-RM       = rm -f
+# Compiler and flags
+CC = gcc
+CFLAGS = -g -Wall -std=c99
+LIBS = -lm
 
-# enable sanitizers with:  make clean && make SAN=asan
-SANFLAGS =
-ifeq ($(SAN),asan)
-SANFLAGS = -fsanitize=address,undefined -fno-omit-frame-pointer
-endif
+# Source files
+STORAGE_SRC = storage_mgr.c
+BUFFER_SRC = buffer_mgr.c buffer_mgr_stat.c
+RECORD_SRC = record_mgr.c rm_serializer.c expr.c
+COMMON_SRC = dberror.c
 
-CFLAGS   = -g -Wall $(SANFLAGS)
-LDFLAGS  = $(SANFLAGS) -lm
+# Test files
+TEST_EXPR = test_expr.c
+TEST_ASSIGN3 = test_assign3_1.c
+TEST_SIMPLE = test_simple.c
 
-# Optional page file argument to your program:
-#   make run ARG=mydata.bin
-ARG ?=
+# Object files
+STORAGE_OBJ = storage_mgr.o
+BUFFER_OBJ = buffer_mgr.o buffer_mgr_stat.o
+RECORD_OBJ = record_mgr.o rm_serializer.o expr.o
+COMMON_OBJ = dberror.o
+TEST_EXPR_OBJ = test_expr.o
+TEST_ASSIGN3_OBJ = test_assign3_1.o
+TEST_SIMPLE_OBJ = test_simple.o
 
-.PHONY: all default clean run run_arg run_expr asan asan-run lldb help
+# Executables
+TEST_EXPR_EXEC = test_expr
+TEST_ASSIGN3_EXEC = test_assign3
+TEST_SIMPLE_EXEC = test_simple
 
-# ===== Build graph =====
-default: recordmgr
-all: recordmgr
+# Default target
+all: $(TEST_EXPR_EXEC) $(TEST_ASSIGN3_EXEC) $(TEST_SIMPLE_EXEC)
 
-recordmgr: test_assign3_1.o dberror.o expr.o record_mgr.o rm_serializer.o storage_mgr.o buffer_mgr.o buffer_mgr_stat.o
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+# Build test_expr executable
+$(TEST_EXPR_EXEC): $(TEST_EXPR_OBJ) $(RECORD_OBJ) $(COMMON_OBJ) $(STORAGE_OBJ) $(BUFFER_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
-test_expr: test_expr.o dberror.o expr.o record_mgr.o rm_serializer.o storage_mgr.o buffer_mgr.o buffer_mgr_stat.o
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+# Build test_assign3 executable
+$(TEST_ASSIGN3_EXEC): $(TEST_ASSIGN3_OBJ) $(RECORD_OBJ) $(COMMON_OBJ) $(STORAGE_OBJ) $(BUFFER_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
-# ===== Object rules =====
-test_assign3_1.o: test_assign3_1.c dberror.h storage_mgr.h test_helper.h buffer_mgr.h buffer_mgr_stat.h
-	$(CC) $(CFLAGS) -c $<
+# Build test_simple executable
+$(TEST_SIMPLE_EXEC): $(TEST_SIMPLE_OBJ) $(RECORD_OBJ) $(COMMON_OBJ) $(STORAGE_OBJ) $(BUFFER_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
-test_expr.o: test_expr.c dberror.h expr.h record_mgr.h tables.h test_helper.h
-	$(CC) $(CFLAGS) -c $<
+# Compile object files
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
-record_mgr.o: record_mgr.c record_mgr.h buffer_mgr.h storage_mgr.h
-	$(CC) $(CFLAGS) -c $<
+# Run test_assign3
+run: $(TEST_ASSIGN3_EXEC)
+	./$(TEST_ASSIGN3_EXEC)
 
-expr.o: expr.c dberror.h record_mgr.h expr.h tables.h
-	$(CC) $(CFLAGS) -c $<
+# Run test_expr
+run_expr: $(TEST_EXPR_EXEC)
+	./$(TEST_EXPR_EXEC)
 
-rm_serializer.o: rm_serializer.c dberror.h tables.h record_mgr.h
-	$(CC) $(CFLAGS) -c $<
+# Run test_simple
+run_simple: $(TEST_SIMPLE_EXEC)
+	./$(TEST_SIMPLE_EXEC)
 
-buffer_mgr_stat.o: buffer_mgr_stat.c buffer_mgr_stat.h buffer_mgr.h
-	$(CC) $(CFLAGS) -c $<
-
-buffer_mgr.o: buffer_mgr.c buffer_mgr.h dt.h storage_mgr.h
-	$(CC) $(CFLAGS) -c $<
-
-storage_mgr.o: storage_mgr.c storage_mgr.h
-	$(CC) $(CFLAGS) -c $<
-
-dberror.o: dberror.c dberror.h
-	$(CC) $(CFLAGS) -c $<
-
-# ===== Utilities =====
+# Clean build files
 clean:
-	$(RM) recordmgr test_expr smoketest smoke.bin *.o *~
+	rm -f *.o $(TEST_EXPR_EXEC) $(TEST_ASSIGN3_EXEC) $(TEST_SIMPLE_EXEC)
 
-help:
-	@echo "Targets:"
-	@echo "  make            (build recordmgr)"
-	@echo "  make run        (run ./recordmgr)"
-	@echo "  make run ARG=foo.bin   (run ./recordmgr with an argument)"
-	@echo "  make asan       (rebuild with AddressSanitizer)"
-	@echo "  make asan-run   (asan build + run)"
-	@echo "  make lldb       (launch LLDB on ./recordmgr)"
-	@echo "  make run_expr   (run test_expr)"
-
-# ===== Run targets =====
-run: recordmgr
-	./recordmgr
-
-# If your program expects a file argument (argv[1]), use:
-run_arg: recordmgr
-	./recordmgr $(ARG)
-
-run_expr: test_expr
-	./test_expr
-
-# ===== Debug helpers =====
-asan:
-	$(MAKE) clean
-	$(MAKE) SAN=asan
-
-asan-run:
-	$(MAKE) asan
-	./recordmgr $(ARG)
-
-lldb: recordmgr
-	lldb ./recordmgr
-
+# Phony targets
+.PHONY: all clean run run_expr run_simple
